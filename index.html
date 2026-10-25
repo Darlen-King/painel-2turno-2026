@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2º Turno 2026 — Painel ao vivo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Presidente — 2º turno 2026</h1>
+      <div class="sub" id="tseTime">Aguardando dados do TSE…</div>
+    </div>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="countdown">—</span>
+      <button id="refresh">Atualizar agora</button>
+    </div>
+  </header>
+
+  <div class="grid cands" id="cands"></div>
+
+  <div class="card diff" style="margin-top:14px">
+    <div class="lbl">Diferença</div>
+    <div class="who" id="diffWho">—</div>
+    <div class="big">
+      <div><div class="num" id="diffVotes">—</div><div class="unit">votos</div></div>
+      <div><div class="num" id="diffPct">—</div><div class="unit">pontos percentuais</div></div>
+    </div>
+    <div class="bar mid" id="bar"><div id="barA"></div><div id="barB"></div></div>
+  </div>
+
+  <div class="grid stats" style="margin-top:14px">
+    <div class="card stat"><div class="k">Seções totalizadas</div><div class="v" id="secPct">—</div><div class="p" id="sec">—</div><div class="prog"><div id="secBar" style="width:0"></div></div></div>
+    <div class="card stat"><div class="k">Votos válidos</div><div class="v" id="vv">—</div><div class="p" id="vvp"></div></div>
+    <div class="card stat"><div class="k">Brancos</div><div class="v" id="vb">—</div><div class="p" id="vbp"></div></div>
+    <div class="card stat"><div class="k">Nulos</div><div class="v" id="vn">—</div><div class="p" id="vnp"></div></div>
+    <div class="card stat"><div class="k">Abstenções</div><div class="v" id="ab">—</div><div class="p" id="abp"></div></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="ufTop">
+      <h2>Resultado por estado</h2>
+      <div class="placar" id="ufPlacar"></div>
+    </div>
+    <div class="ufGrid">
+      <div class="ufLista">
+        <table class="uft"><thead id="ufHead"></thead><tbody id="ufBody"><tr><td class="mini">Carregando estados…</td></tr></tbody></table>
+      </div>
+      <div class="ufMapa">
+        <svg id="mapa" role="img" aria-label="Mapa do Brasil por estado"></svg>
+        <div class="mapTip" id="mapTip" hidden></div>
+        <div class="mini legenda">Cor = quem lidera no estado · mais forte = vantagem maior. Toque num estado para ver os números.</div>
+      </div>
+    </div>
+    <div class="sub" id="ufNote"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="ufTop"><h2>Evolução da diferença (votos)</h2>
+      <div class="histBtns"><button id="histCopy">Copiar histórico</button><button id="histImport">Importar histórico</button></div></div>
+    <div id="histBox" hidden><textarea id="histTxt" rows="4" placeholder="Cole aqui o histórico copiado"></textarea><button id="histMerge">Juntar ao histórico</button></div>
+    <div class="sub" id="histMsg"></div>
+    <svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+    <div class="sub" id="chartNote">O gráfico vai se formando a cada atualização com dado novo.</div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="cfg">
+      <span>Código da eleição (2º turno):</span>
+      <input id="cfgCode" inputmode="numeric">
+      <span>Ano:</span><input id="cfgYear" inputmode="numeric" style="width:70px">
+      <button id="cfgApply">Aplicar</button>
+      <span id="cfgUrl" style="word-break:break-all"></span>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<script src="mapa.js"></script>
+<script src="historico-inicial.js"></script>
+<script src="app.js"></script>
+<script src="estados.js"></script>
+</body>
+</html>
