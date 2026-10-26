@@ -27,3 +27,7 @@
   .mdLista .ufLista{max-height:60vh}
   .mdMapa .mapTip{position:static;max-width:none;margin-top:8px}
 }
+#mapa circle{stroke:var(--card);stroke-width:1;vector-effect:non-scaling-stroke;cursor:pointer;transition:fill .3s,fill-opacity .3s}
+#mapa circle.hov,#mapa circle.sel{stroke:var(--ink);stroke-width:2.5}
+#mapa path.contorno{fill:var(--line);fill-opacity:.4;stroke:var(--muted);stroke-width:1.2;cursor:grab}
+.trilha b{font-weight:800}
