@@ -53,7 +53,10 @@ for (const uf of UFS) {
   out.sort((a, b) => a.nm.localeCompare(b.nm, "pt-BR"));
   fs.writeFileSync(`data/mun/${uf}.json`, JSON.stringify({ gerado: new Date().toISOString(), t1: T1, t2: T2, mun: out }));
 
-  const geo = await baixar(`https://servicodados.ibge.gov.br/api/v3/malhas/estados/${uf.toUpperCase()}?intrarregiao=municipio&formato=application/vnd.geo+json&qualidade=minima`);
-  fs.writeFileSync(`data/geo/${uf}.json`, geo);
+  // o IBGE costuma bloquear servidores fora do Brasil; se falhar, a página baixa o mapa direto do IBGE
+  try {
+    const geo = await baixar(`https://servicodados.ibge.gov.br/api/v3/malhas/estados/${uf.toUpperCase()}?intrarregiao=municipio&formato=application/vnd.geo+json&qualidade=minima`, 1);
+    fs.writeFileSync(`data/geo/${uf}.json`, geo);
+  } catch { console.log(`${uf}: mapa do IBGE não baixado (a página busca direto no IBGE)`); }
   console.log(`${uf}: ${out.length} cidades, ${out.filter(m => m.t2).length} com resultado`);
 }
