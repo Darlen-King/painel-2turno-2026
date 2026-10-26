@@ -1,0 +1,63 @@
+name: Completar dados por seção (só o que faltou)
+
+on:
+  workflow_dispatch:   # rodar manualmente em Ações → "Gerar dados por seção…" → Run workflow
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dados-secoes-completar
+  cancel-in-progress: false
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        uf: [sp, mg, rj, ba, rs, pr, pe, ce, pa, sc, go, ma, pb, am, es, pi, rn, al, mt, ms, df, se, ro, to, ac, ap, rr]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Buscar de novo as seções que faltaram
+        run: node scripts/secoes.mjs completar ${{ matrix.uf }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saida-${{ matrix.uf }}
+          path: saida/${{ matrix.uf }}
+          retention-days: 7
+
+  salvar:
+    needs: coletar
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefatos
+      - name: Organizar arquivos
+        run: |
+          mkdir -p saida
+          for d in artefatos/saida-*; do uf="${d##*/saida-}"; mkdir -p "saida/$uf"; cp -r "$d"/. "saida/$uf/"; done
+          ls saida
+      - name: Juntar nomes e endereços dos locais de votação
+        run: node scripts/secoes.mjs nomes
+      - name: Salvar no repositório
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/sec
+          if git diff --cached --quiet; then echo "nada novo"; exit 0; fi
+          git commit -m "Dados por seção: seções que faltavam"
+          git pull --rebase
+          git push
