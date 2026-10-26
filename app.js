@@ -126,7 +126,7 @@ function render(d) {
   const stamp = `${d.dg || d.dt || ""} ${d.hg || d.ht || ""}`.trim();
   $("tseTime").textContent = `Última totalização TSE: ${stamp || "—"} · consultado às ${new Date().toLocaleTimeString("pt-BR")}`;
 
-  CAND_NM = {}; cands.forEach(c => CAND_NM[c.n] = c.nm);
+  cands.forEach(c => CAND_NM[c.n] = c.nm);
   if (stamp !== lastStamp) {
     const prev = history[history.length - 1];
     lastStamp = stamp;
@@ -140,7 +140,7 @@ function render(d) {
 }
 
 // ---------- Histórico da diferença (fica salvo neste navegador) ----------
-let CAND_NM = {};
+let CAND_NM = { "13": "LULA", "22": "FLAVIO BOLSONARO" };
 const histKey = () => `painel-hist-${YEAR}-${CODE}`;
 const tsNum = t => { const m = String(t).match(/(\d+)\/(\d+)\/(\d+)\s+(\d+):(\d+):(\d+)/); return m ? Date.UTC(m[3], m[2] - 1, m[1], m[4], m[5], m[6]) : 0; };
 
@@ -170,23 +170,84 @@ function loadHist() {
 // valor com sinal: acima de zero = 22 à frente, abaixo = 13 à frente
 const signed = h => h.leader === "13" ? -h.v : h.v;
 
+const fmtCurto = v => { const a = Math.abs(v);
+  return a >= 1e6 ? (a / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: a >= 1e7 ? 0 : 1 }) + " mi"
+       : a >= 1e3 ? Math.round(a / 1e3).toLocaleString("pt-BR") + " mil" : String(a); };
+const horaDe = t => String(t).split(" ")[1]?.slice(0, 5) || t;
+let chartPts = [];
+
 function drawChart() {
-  const svg = $("chart"), W = 600, H = 150, P = 12;
-  if (history.length < 2) { svg.innerHTML = ""; $("chartNote").textContent = history.length ? "1 leitura salva — o gráfico aparece a partir da 2ª." : "O gráfico vai se formando a cada atualização com dado novo."; return; }
-  const vals = history.map(signed);
-  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
-  if (hi === lo) hi = lo + 1;
-  const y = v => H - P - (v - lo) / (hi - lo) * (H - 2 * P);
-  const pts = history.map((h, i) => [P + i * (W - 2 * P) / (history.length - 1), y(signed(h))]);
-  const cor = h => h.leader === "13" ? "var(--a)" : "var(--b)";
-  svg.innerHTML =
-    `<line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>` +
-    `<polyline fill="none" stroke="var(--muted)" stroke-opacity=".6" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts.map(p => p.join(",")).join(" ")}"/>` +
-    pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${cor(history[i])}"><title>${history[i].t} — ${fmt(history[i].v)} votos (${CAND_NM[history[i].leader] || history[i].leader} à frente)</title></circle>`).join("");
+  const svg = $("chart");
+  if (history.length < 2) {
+    svg.innerHTML = ""; chartPts = [];
+    $("chartNote").textContent = history.length ? "1 leitura salva — o gráfico aparece a partir da 2ª." : "O gráfico vai se formando a cada atualização com dado novo.";
+    return;
+  }
+  const W = Math.max(svg.clientWidth || 600, 300), H = 260, L = 78, R = 14, T = 14, B = 30;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const n22 = CAND_NM["22"] || "22", n13 = CAND_NM["13"] || "13";
-  $("chartNote").innerHTML = `${history.length} leituras salvas · de ${history[0].t} a ${history[history.length - 1].t} · ` +
-    `acima da linha tracejada: <b style="color:var(--b-txt)">${n22}</b> à frente · abaixo: <b style="color:var(--a)">${n13}</b> à frente`;
+  const vals = history.map(signed), ts = history.map(h => tsNum(h.t));
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  // passo "redondo" para o eixo Y
+  const bruto = (hi - lo) / 5 || 1, p10 = 10 ** Math.floor(Math.log10(bruto));
+  const passo = [1, 2, 2.5, 5, 10].map(m => m * p10).find(m => m >= bruto);
+  lo = Math.floor(lo / passo) * passo; hi = Math.ceil(hi / passo) * passo;
+  const t0 = ts[0], t1 = ts[ts.length - 1] || t0 + 1;
+  const x = t => L + (t - t0) / ((t1 - t0) || 1) * (W - L - R);
+  const y = v => T + (hi - v) / ((hi - lo) || 1) * (H - T - B);
+  const cor = h => h.leader === "13" ? "var(--a)" : "var(--b)";
+  let g = "";
+  // grade + valores do eixo Y
+  for (let v = lo; v <= hi + 1e-9; v += passo) {
+    const lab = v === 0 ? "empate" : `${v > 0 ? n22.split(" ")[0] : n13.split(" ")[0]} +${fmtCurto(v)}`;
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="${v === 0 ? "zero" : "grid"}"/>` +
+         `<text x="${L - 6}" y="${y(v)}" class="ylab" style="fill:${v > 0 ? "var(--b-txt)" : v < 0 ? "var(--a)" : "var(--muted)"}">${lab}</text>`;
+  }
+  // horários do eixo X (marcas a cada 10/15/30/60 min)
+  const minutos = (t1 - t0) / 60000, alvo = Math.max(3, Math.floor((W - L) / 80));
+  const passoMin = [5, 10, 15, 30, 60, 90, 120, 240].find(m => minutos / m <= alvo) || 480;
+  for (let t = Math.ceil(t0 / (passoMin * 60000)) * passoMin * 60000; t <= t1; t += passoMin * 60000) {
+    const d = new Date(t), lab = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+    g += `<line x1="${x(t)}" x2="${x(t)}" y1="${T}" y2="${H - B}" class="grid"/><text x="${x(t)}" y="${H - B + 18}" class="xlab">${lab}</text>`;
+  }
+  chartPts = history.map((h, i) => ({ h, x: x(ts[i]), y: y(vals[i]) }));
+  // linha (interrompida quando há buraco de mais de 15 min sem leitura)
+  let path = "";
+  chartPts.forEach((p, i) => { path += (i && ts[i] - ts[i - 1] <= 15 * 60000 ? "L" : "M") + p.x.toFixed(1) + " " + p.y.toFixed(1); });
+  g += `<path d="${path}" fill="none" stroke="var(--muted)" stroke-opacity=".55" stroke-width="2"/>`;
+  g += chartPts.map(p => `<circle cx="${p.x}" cy="${p.y}" r="${chartPts.length > 120 ? 2.2 : 3}" fill="${cor(p.h)}"/>`).join("");
+  // destaque do último valor
+  const u = chartPts[chartPts.length - 1];
+  g += `<circle cx="${u.x}" cy="${u.y}" r="5" fill="${cor(u.h)}" stroke="var(--card)" stroke-width="2"/>` +
+       `<text x="${u.x - 8}" y="${u.y - 10}" class="ultimo" style="fill:${u.h.leader === "13" ? "var(--a)" : "var(--b-txt)"}">${fmt(u.h.v)} · ${horaDe(u.h.t)}</text>`;
+  g += `<line id="chHover" y1="${T}" y2="${H - B}" class="hover" style="display:none"/>`;
+  svg.innerHTML = g;
+  $("chartNote").innerHTML = `${history.length} leituras · de ${horaDe(history[0].t)} a ${horaDe(history[history.length - 1].t)} (${history[0].t.split(" ")[0]}) · ` +
+    `acima da linha <i>empate</i>: <b style="color:var(--b-txt)">${n22}</b> à frente · abaixo: <b style="color:var(--a)">${n13}</b> à frente · passe o mouse ou toque no gráfico para ver cada leitura`;
 }
+
+// dica com horário e valor ao passar o mouse / tocar
+function chartHover(ev) {
+  if (!chartPts.length) return;
+  const svg = $("chart"), r = svg.getBoundingClientRect();
+  const vb = svg.viewBox.baseVal, px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+  const sx = px * vb.width / r.width;
+  let best = chartPts[0];
+  chartPts.forEach(p => { if (Math.abs(p.x - sx) < Math.abs(best.x - sx)) best = p; });
+  const h = best.h, tip = $("chartTip"), ln = document.getElementById("chHover");
+  if (ln) { ln.setAttribute("x1", best.x); ln.setAttribute("x2", best.x); ln.style.display = ""; }
+  tip.hidden = false;
+  tip.innerHTML = `<b>${horaDe(h.t)}</b> <span class="mini">${h.t.split(" ")[0]}</span><br>` +
+    `<span style="color:${h.leader === "13" ? "var(--a)" : "var(--b-txt)"}"><b>${CAND_NM[h.leader] || h.leader}</b> à frente</span><br>` +
+    `por <b>${fmt(h.v)}</b> votos<br><span class="mini">${pctFmt(Number(h.pst) || 0)}% das seções apuradas</span>`;
+  const left = best.x * r.width / vb.width;
+  tip.style.left = Math.min(Math.max(left - tip.offsetWidth / 2, 0), r.width - tip.offsetWidth) + "px";
+}
+$("chart").addEventListener("mousemove", chartHover);
+$("chart").addEventListener("touchstart", chartHover, { passive: true });
+$("chart").addEventListener("touchmove", chartHover, { passive: true });
+$("chart").addEventListener("mouseleave", () => { $("chartTip").hidden = true; const l = document.getElementById("chHover"); if (l) l.style.display = "none"; });
+let resizeT; window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(drawChart, 150); });
 
 // botões de copiar / importar histórico
 $("histCopy").onclick = async () => {

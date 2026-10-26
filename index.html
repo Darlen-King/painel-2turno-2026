@@ -59,11 +59,11 @@
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="ufTop"><h2>Evolução da diferença (votos)</h2>
+    <div class="ufTop"><h2>Evolução da diferença (votos × horário)</h2>
       <div class="histBtns"><button id="histCopy">Copiar histórico</button><button id="histImport">Importar histórico</button></div></div>
     <div id="histBox" hidden><textarea id="histTxt" rows="4" placeholder="Cole aqui o histórico copiado"></textarea><button id="histMerge">Juntar ao histórico</button></div>
     <div class="sub" id="histMsg"></div>
-    <svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+    <div class="chartWrap"><svg id="chart" viewBox="0 0 600 260"></svg><div class="chartTip" id="chartTip" hidden></div></div>
     <div class="sub" id="chartNote">O gráfico vai se formando a cada atualização com dado novo.</div>
   </div>
 
