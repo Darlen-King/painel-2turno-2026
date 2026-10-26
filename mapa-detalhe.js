@@ -57,7 +57,7 @@ function pintura(it) {
 }
 
 // ---------- estado da página ----------
-let modo = "cresc";            // cresc | venc
+let modo = new URLSearchParams(location.search).get("modo") === "venc" ? "venc" : "cresc"; // cresc | venc
 let nivel = "BR";              // BR ou sigla da UF
 let itens = [];                // [{id, nm, d, cx, cy, t1, t2}]
 let ordem = "saldo", busca = "", selId = null;
@@ -351,6 +351,7 @@ function ptSVG(ev) {
 })();
 
 // ---------- controles ----------
+document.querySelectorAll(".mapTabs button").forEach(x => x.classList.toggle("on", x.dataset.m === modo));
 document.querySelectorAll(".mapTabs button").forEach(bt => bt.onclick = () => {
   modo = bt.dataset.m;
   document.querySelectorAll(".mapTabs button").forEach(x => x.classList.toggle("on", x === bt));

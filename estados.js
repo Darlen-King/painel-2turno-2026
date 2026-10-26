@@ -229,11 +229,8 @@ document.querySelectorAll(".mapTabs button").forEach(bt => bt.onclick = () => {
   svg.querySelectorAll("path").forEach(p => {
     const uf = p.id.slice(4);
     p.onmouseenter = () => destacar(uf);
-    p.onclick = () => {
-      ufSel = ufSel === uf ? null : uf; renderStates();
-      const tr = document.querySelector(`#ufBody tr[data-uf="${uf}"]`);
-      if (tr && ufSel) tr.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    };
+    // clicar no estado abre a página de detalhes já nesse estado (no mesmo tipo de mapa)
+    p.onclick = () => { location.href = `mapa.html?modo=${modoMapa}#${uf}`; };
   });
 })();
 loadStates();
