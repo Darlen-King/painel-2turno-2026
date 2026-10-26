@@ -1,5 +1,6 @@
 // Etapa 2: resultado por SEÇÃO e LOCAL DE VOTAÇÃO, nos dois turnos, a partir dos boletins de urna do TSE.
 //   node scripts/secoes.mjs coletar se      → grava saida/se/<municipio>.json
+//   node scripts/secoes.mjs completar se    → busca de novo o que faltou em data/sec/se e grava em saida/se
 //   node scripts/secoes.mjs nomes           → junta tudo em data/sec/ e acrescenta nome/endereço dos locais (dados abertos do TSE)
 import fs from "fs";
 import path from "path";
@@ -95,7 +96,7 @@ async function coletar(uf) {
   for (const t of ["t1", "t2"]) for (const m of cfg[t]) for (const z of m.zon) for (const s of z.sec)
     tarefas.push({ t, mu: m.cd, nm: m.nm, zona: z.cd, sec: s.ns });
   console.log(`${uf}: ${tarefas.length} boletins para baixar`);
-  const mun = {}; let feitos = 0, falhas = 0;
+  const mun = {}, perdidos = []; let feitos = 0, falhas = 0;
   const fila = tarefas.slice(), ini = Date.now();
   async function trabalhador() {
     while (fila.length) {
@@ -108,11 +109,12 @@ async function coletar(uf) {
         const L = M.locais[chaveLocal] ??= { z: Number(k.zona), l: r.local ?? 0, s: {} };
         const S = L.s[Number(k.sec)] ??= {};
         S[k.t] = [r.v["13"], r.v["22"], r.v.validos, r.v.brancos, r.v.nulos];
-      } else falhas++;
+      } else { falhas++; perdidos.push(k); }
       if (++feitos % 5000 === 0) console.log(`${uf}: ${feitos}/${tarefas.length} (${Math.round((Date.now() - ini) / 1000)} s, ${falhas} sem boletim)`);
     }
   }
   await Promise.all(Array.from({ length: CONC }, trabalhador));
+  await novaTentativa(perdidos, mun, uf);
   // seção que mudou de local entre os turnos: junta tudo no local do 2º turno
   for (const M of Object.values(mun)) {
     const ondeT2 = {};
@@ -126,6 +128,45 @@ async function coletar(uf) {
   fs.mkdirSync(`saida/${uf}`, { recursive: true });
   for (const M of Object.values(mun)) fs.writeFileSync(`saida/${uf}/${M.cd}.json`, JSON.stringify(M));
   console.log(`${uf}: pronto — ${Object.keys(mun).length} cidades, ${feitos} boletins, ${falhas} sem boletim, ${Math.round((Date.now() - ini) / 60000)} min`);
+}
+
+// tenta de novo, devagar, as seções que falharam (as que não existem no TSE dão 404 e são ignoradas)
+async function novaTentativa(lista, mun, uf) {
+  if (!lista.length) return;
+  console.log(`${uf}: nova tentativa de ${lista.length} seções`);
+  let rec = 0; const fila = lista.slice();
+  async function t() {
+    while (fila.length) {
+      const k = fila.shift();
+      const r = await secao(PLEITO[k.t], uf, k.mu, k.zona, k.sec);
+      if (!r) continue;
+      const M = mun[k.mu] ??= { cd: k.mu, nm: k.nm, locais: {} };
+      const L = M.locais[`${Number(k.zona)}-${r.local ?? 0}`] ??= { z: Number(k.zona), l: r.local ?? 0, s: {} };
+      (L.s[Number(k.sec)] ??= {})[k.t] = [r.v["13"], r.v["22"], r.v.validos, r.v.brancos, r.v.nulos];
+      rec++;
+    }
+  }
+  await Promise.all(Array.from({ length: 8 }, t));
+  console.log(`${uf}: recuperadas ${rec} de ${lista.length}`);
+}
+
+// completa os arquivos já salvos em data/sec/<uf> com as seções que faltaram na primeira coleta
+async function completar(uf) {
+  const dir = `data/sec/${uf}`, mun = {};
+  if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir)) { const M = JSON.parse(fs.readFileSync(`${dir}/${f}`, "utf8")); mun[M.cd] = M; }
+  const tem = new Set();
+  for (const M of Object.values(mun)) for (const L of Object.values(M.locais)) for (const [s, S] of Object.entries(L.s))
+    for (const t of ["t1", "t2"]) if (S[t]) tem.add(`${t}|${M.cd}|${L.z}|${Number(s)}`);
+  const faltam = [];
+  for (const t of ["t1", "t2"]) {
+    const txt = await baixar(`${BASE}/${PLEITO[t]}/config/${uf}/${uf}-p00${PLEITO[t]}-cs.json`);
+    for (const m of txt ? JSON.parse(txt).abr[0].mu : []) for (const z of m.zon) for (const s of z.sec)
+      if (!tem.has(`${t}|${m.cd}|${Number(z.cd)}|${Number(s.ns)}`)) faltam.push({ t, mu: m.cd, nm: m.nm, zona: z.cd, sec: s.ns });
+  }
+  console.log(`${uf}: ${tem.size} já salvas, ${faltam.length} faltando`);
+  await novaTentativa(faltam, mun, uf);
+  fs.mkdirSync(`saida/${uf}`, { recursive: true });
+  for (const M of Object.values(mun)) fs.writeFileSync(`saida/${uf}/${M.cd}.json`, JSON.stringify(M));
 }
 
 // ---------- nomes e endereços dos locais (dados abertos do TSE) ----------
@@ -172,5 +213,6 @@ async function nomes() {
 
 const [, , cmd, uf] = process.argv;
 if (cmd === "coletar") await coletar(uf);
+else if (cmd === "completar") await completar(uf);
 else if (cmd === "nomes") await nomes();
 else console.log("uso: node scripts/secoes.mjs coletar <uf> | nomes");
