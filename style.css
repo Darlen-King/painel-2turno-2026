@@ -127,3 +127,4 @@
 .mapTip{top:44px;bottom:auto}
 .t12{white-space:nowrap}
 @media (max-width:820px){.t12{font-size:10.5px}.mapTabs button{font-size:12px;padding:5px 10px}}
+.btnLink{font-size:14px;color:var(--ink);text-decoration:none;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px}

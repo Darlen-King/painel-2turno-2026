@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa detalhado — 2º turno 2026</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mapa-detalhe.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Mapa detalhado — Presidente 2026</h1>
+      <div class="sub">Do Brasil às cidades · comparação entre o 1º e o 2º turno · dados oficiais do TSE e mapas do IBGE</div>
+    </div>
+    <a class="voltar" href="index.html">← Voltar ao painel</a>
+  </header>
+
+  <div class="card">
+    <div class="topo">
+      <div class="trilha" id="trilha">Brasil</div>
+      <div class="mapTabs"><button data-m="cresc" class="on">Quem cresceu</button><button data-m="venc">Quem venceu</button></div>
+    </div>
+    <div class="placar" id="placar"></div>
+    <div class="status" id="status" hidden><span id="statusTxt"></span><div class="prog" hidden><div id="statusBar"></div></div></div>
+
+    <div class="mdGrid">
+      <div class="mdMapa">
+        <svg id="mapa" role="img" aria-label="Mapa"></svg>
+        <div class="zoomBtns"><button id="zoomMais" title="Aproximar">+</button><button id="zoomMenos" title="Afastar">−</button><button id="zoomReset" title="Ver tudo">⤢</button></div>
+        <div class="mapTip" id="tip" hidden></div>
+        <div class="mini dica" id="dica"></div>
+        <div class="legenda" id="legenda"></div>
+      </div>
+      <div class="mdLista">
+        <div class="listaTopo"><h2 id="listaTit">Estados</h2><input id="busca" type="search" placeholder="Buscar cidade…" hidden></div>
+        <div class="ufLista"><table class="uft"><thead id="lHead"></thead><tbody id="lBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="mapa.js"></script>
+<script src="mapa-detalhe.js"></script>
+</body>
+</html>
