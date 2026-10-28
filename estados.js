@@ -197,7 +197,7 @@ function renderStates() {
     (perd && ninguem ? `<span><i style="background:var(--muted);opacity:.35"></i>Ninguém perdeu: <b>${ninguem}</b></span>` : "");
 
   legenda();
-  if (ufSel) destacar(ufSel);
+  if (ufSel && !$("mapTip").hidden) destacar(ufSel);
 }
 
 // índice de cores embaixo do mapa
@@ -229,6 +229,12 @@ function legendaPerda() {
     <div class="lgEsc">${passos.map((v, i) => `<span>${i === 0 || i === passos.length - 1 ? v + "%+" : v + "%"}</span>`).join("")}</div>
     <div class="lgLados"><span style="color:var(--a)">◀ ${n13} perdeu mais votos</span><span style="color:var(--b-txt)">${n22} perdeu mais votos ▶</span></div>
     <div class="lgNota"><i class="lgSem" style="background:color-mix(in srgb, var(--muted) 45%, var(--card))"></i> os dois ganharam votos · <i class="lgSem"></i> sem dados · a cor vai para quem perdeu mais votos; mais forte = perdeu uma parte maior do que tinha. Toque num estado para ver os números.</div>`;
+}
+
+// esconde a caixinha de números quando o mouse sai do mapa/lista ou quando clica fora
+function esconderTip() {
+  $("mapTip").hidden = true;
+  document.querySelectorAll("#mapa path.hov").forEach(p => p.classList.remove("hov"));
 }
 
 function destacar(uf) {
@@ -281,6 +287,9 @@ document.querySelectorAll(".mapTabs button").forEach(bt => bt.onclick = () => {
     // clicar no estado abre a página de detalhes já nesse estado (no mesmo tipo de mapa)
     p.onclick = () => { location.href = `mapa.html?modo=${modoMapa}#${uf}`; };
   });
+  svg.addEventListener("mouseleave", esconderTip);
+  $("ufBody").addEventListener("mouseleave", esconderTip);
+  document.addEventListener("click", ev => { if (!ev.target.closest("#mapa, #ufBody")) esconderTip(); });
 })();
 loadStates();
 loadTurno1();
