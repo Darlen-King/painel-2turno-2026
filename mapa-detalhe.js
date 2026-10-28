@@ -1,9 +1,10 @@
-// Mapa detalhado: Brasil → estado → cidades → colégios eleitorais → seções (quem cresceu do 1º para o 2º turno)
+// Mapa detalhado: Brasil → estado → cidades → colégios eleitorais → seções
+// modos: quem cresceu (p.p.) · quem venceu · quem perdeu votos do 1º para o 2º turno
 const BASE = "https://resultados.tse.jus.br/oficial";
 const ANO = "2026", T2 = "6258", T1 = "6257";
 const UFS = ["ac","al","am","ap","ba","ce","df","es","go","ma","mg","ms","mt","pa","pb","pe","pi","pr","rj","rn","ro","rr","rs","sc","se","sp","to"];
 const NOMES = { "13": "LULA", "22": "FLAVIO BOLSONARO" };
-const LIM = { cresc: 15, venc: 30 };
+const LIM = { cresc: 15, venc: 30, perda: 10 };  // perda: % dos votos do 1º turno
 
 const $ = id => document.getElementById(id);
 const pad = c => String(c).padStart(6, "0");
@@ -11,6 +12,7 @@ const num = s => typeof s === "number" ? s : parseFloat(String(s ?? "0").replace
 const pctNum = s => typeof s === "number" ? s : parseFloat(String(s ?? "0").replace(",", "."));
 const fmt = n => Number(n || 0).toLocaleString("pt-BR");
 const pctFmt = (n, d = 2) => Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const sinalV = v => (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v));  // votos com sinal
 const sinal = (v, d = 1) => (v > 0 ? "+" : v < 0 ? "−" : "") + pctFmt(Math.abs(v), d);
 const corNum = n => n === "13" ? "var(--a)" : "var(--b)";
 const txtNum = n => n === "13" ? "var(--a)" : "var(--b-txt)";
@@ -43,8 +45,15 @@ function calc(it) {
   if (!it || !it.t1 || !it.t2 || !it.t1["13"] || !it.t1["22"] || !it.t2["13"] || !it.t2["22"]) return null;
   const g13 = it.t2["13"][1] - it.t1["13"][1], g22 = it.t2["22"][1] - it.t1["22"][1];
   const lid = it.t2["22"][0] > it.t2["13"][0] ? "22" : "13";
+  // votos ganhos (+) ou perdidos (−) do 1º para o 2º turno, e em % dos votos que tinha no 1º
+  const v13 = it.t2["13"][0] - it.t1["13"][0], v22 = it.t2["22"][0] - it.t1["22"][0];
+  const r13 = it.t1["13"][0] ? v13 / it.t1["13"][0] * 100 : 0, r22 = it.t1["22"][0] ? v22 / it.t1["22"][0] * 100 : 0;
+  const quemPerde = v13 < 0 || v22 < 0 ? (v13 < v22 ? "13" : "22") : null;
   return {
     g13, g22, saldo: g22 - g13, quemCresc: g22 - g13 >= 0 ? "22" : "13",
+    v13, v22, r13, r22, quemPerde,
+    perdeu: quemPerde ? -(quemPerde === "13" ? v13 : v22) : 0,
+    rPerdeu: quemPerde ? -(quemPerde === "13" ? r13 : r22) : 0,
     lid, dp: Math.abs(it.t2["22"][1] - it.t2["13"][1]), dv: Math.abs(it.t2["22"][0] - it.t2["13"][0])
   };
 }
@@ -52,12 +61,14 @@ const intens = (v, lim) => 0.28 + Math.min(Math.abs(v), lim) / lim * 0.72;
 function pintura(it) {
   const m = calc(it);
   if (!m) return { fill: "var(--line)", op: 1 };
+  if (modo === "perda") return m.quemPerde ? { fill: corNum(m.quemPerde), op: intens(m.rPerdeu, LIM.perda) } : { fill: "var(--muted)", op: 0.45 };
   return modo === "cresc" ? { fill: corNum(m.quemCresc), op: intens(m.saldo, LIM.cresc) }
                           : { fill: corNum(m.lid), op: intens(m.dp, LIM.venc) };
 }
 
 // ---------- estado da página ----------
-let modo = new URLSearchParams(location.search).get("modo") === "venc" ? "venc" : "cresc"; // cresc | venc
+const modoUrl = new URLSearchParams(location.search).get("modo");
+let modo = ["venc", "perda"].includes(modoUrl) ? modoUrl : "cresc"; // cresc | venc | perda
 let nav = { uf: null, mun: null, loc: null };   // onde estamos: Brasil › UF › cidade › local
 let nivel = "BR";              // BR | UF | MUN | LOC
 let itens = [];                // o que aparece na lista
@@ -303,14 +314,30 @@ function unidade(plural = true) {
   return { BR: plural ? "estados" : "Estado", UF: plural ? "cidades" : "Cidade", MUN: plural ? "colégios" : "Colégio eleitoral", LOC: plural ? "seções" : "Seção" }[nivel];
 }
 function placar() {
-  const c = { "13": 0, "22": 0 }; let sem = 0;
-  itens.forEach(it => { const m = calc(it); if (!m) { sem++; return; } c[modo === "cresc" ? m.quemCresc : m.lid]++; });
+  const c = { "13": 0, "22": 0 }; let sem = 0, ninguem = 0;
+  itens.forEach(it => {
+    const m = calc(it); if (!m) { sem++; return; }
+    if (modo === "perda") { if (m.quemPerde) c[m.quemPerde]++; else ninguem++; }
+    else c[modo === "cresc" ? m.quemCresc : m.lid]++;
+  });
+  const sufixo = { cresc: " onde cresceu mais", perda: " onde perdeu mais votos", venc: "" }[modo];
   $("placar").innerHTML = itens.length ? ["13", "22"].map(n =>
-    `<span><i style="background:${corNum(n)}"></i>${NOMES[n]}: <b>${c[n]}</b> ${unidade()}${modo === "cresc" ? " onde cresceu mais" : ""}</span>`).join("") +
+    `<span><i style="background:${corNum(n)}"></i>${NOMES[n]}: <b>${c[n]}</b> ${unidade()}${sufixo}</span>`).join("") +
+    (modo === "perda" && ninguem ? `<span><i style="background:var(--muted);opacity:.35"></i>Ninguém perdeu: <b>${ninguem}</b></span>` : "") +
     (sem && nivel !== "BR" ? `<span class="mini">${sem} sem dados</span>` : "") : "";
 }
 
 function legenda() {
+  if (modo === "perda") {
+    const cor = (n, v) => `color-mix(in srgb, ${corNum(n)} ${Math.round(intens(v, LIM.perda) * 100)}%, var(--card))`;
+    $("legenda").innerHTML = `
+    <div class="lgTit">Quem perdeu mais votos do 1º para o 2º turno (em % dos próprios votos do 1º turno)</div>
+    <div class="lgBar" style="background:linear-gradient(90deg, ${cor("13", LIM.perda)} 0%, ${cor("13", 0)} 49.5%, ${cor("22", 0)} 50.5%, ${cor("22", LIM.perda)} 100%)"></div>
+    <div class="lgEsc">${[10, 5, 0, 5, 10].map((v, i) => `<span>${v}%${i === 0 || i === 4 ? "+" : ""}</span>`).join("")}</div>
+    <div class="lgLados"><span style="color:var(--a)">◀ ${primeiro("13")} perdeu mais votos</span><span style="color:var(--b-txt)">${primeiro("22")} perdeu mais votos ▶</span></div>
+    <div class="lgNota"><i class="lgSem" style="background:color-mix(in srgb, var(--muted) 45%, var(--card))"></i> os dois ganharam votos · <i class="lgSem"></i> sem dados · mais forte = perdeu uma parte maior do que tinha</div>`;
+    return;
+  }
   const lim = LIM[modo], cresc = modo === "cresc";
   const passos = cresc ? [15, 10, 5, 0, 5, 10, 15] : [30, 20, 10, 0, 10, 20, 30];
   const cor = (n, v) => `color-mix(in srgb, ${corNum(n)} ${Math.round(intens(v, lim) * 100)}%, var(--card))`;
@@ -323,7 +350,7 @@ function legenda() {
 }
 
 function lista() {
-  const cresc = modo === "cresc";
+  const cresc = modo === "cresc", perd = modo === "perda";
   const tit = {
     BR: "Estados",
     UF: `Cidades de ${MAPA_UF[nav.uf]?.nome || nav.uf} (${itens.length})`,
@@ -334,23 +361,32 @@ function lista() {
   $("busca").hidden = nivel === "BR" || nivel === "LOC";
   $("busca").placeholder = nivel === "MUN" ? "Buscar colégio ou bairro…" : "Buscar cidade…";
   $("lHead").innerHTML = `<tr><th data-o="nome">${unidade(false)}</th>
-    <th class="r" style="color:var(--a)">${primeiro("13")}<div class="mini">${cresc ? "1º → 2º" : "2º turno"}</div></th>
-    <th class="r" style="color:var(--b-txt)">${primeiro("22")}<div class="mini">${cresc ? "1º → 2º" : "2º turno"}</div></th>
-    <th class="r" data-o="saldo">${cresc ? "Cresceu mais" : "Vantagem"}</th></tr>`;
+    <th class="r" style="color:var(--a)">${primeiro("13")}<div class="mini">${cresc || perd ? "1º → 2º" : "2º turno"}</div></th>
+    <th class="r" style="color:var(--b-txt)">${primeiro("22")}<div class="mini">${cresc || perd ? "1º → 2º" : "2º turno"}</div></th>
+    <th class="r" data-o="saldo">${cresc ? "Cresceu mais" : perd ? "Perdeu mais" : "Vantagem"}</th></tr>`;
   $("lHead").querySelectorAll("[data-o]").forEach(th => { th.classList.toggle("on", th.dataset.o === ordem); th.onclick = () => { ordem = th.dataset.o; lista(); }; });
   const q = semAcento(busca);
-  const val = it => { const m = calc(it); return !m ? -1e9 : cresc ? m.saldo : (m.lid === "22" ? m.dp : -m.dp); };
+  const val = it => { const m = calc(it); return !m ? -1e9 : cresc ? m.saldo : perd ? m.perdeu : (m.lid === "22" ? m.dp : -m.dp); };
   const vis = itens.filter(it => !q || semAcento(it.nm + " " + (it.sub || "")).includes(q))
     .sort((a, b) => ordem === "nome" ? a.nm.localeCompare(b.nm, "pt-BR", { numeric: true }) : val(b) - val(a));
   $("lBody").innerHTML = vis.map(it => {
     const m = calc(it);
     if (!m) return `<tr data-id="${it.id}"><td>${nomeItem(it)}</td><td colspan="3" class="r mini">sem dados</td></tr>`;
     const cel = n => cresc
-      ? `<span class="t12">${pctFmt(it.t1[n][1], 1)} → ${pctFmt(it.t2[n][1], 1)}</span><div class="mini" style="color:${txtNum(n)}">${sinal(it.t2[n][1] - it.t1[n][1])} p.p.</div>`
+      ? `<span class="t12">${pctFmt(it.t1[n][1], 1)} → ${pctFmt(it.t2[n][1], 1)}</span><div class="mini" style="color:${txtNum(n)}">${sinal(it.t2[n][1] - it.t1[n][1])} p.p.</div><div class="mini">${sinalV(m["v" + n])} votos</div>`
+      : perd
+      ? `<span class="t12">${fmt(it.t1[n][0])} → ${fmt(it.t2[n][0])}</span><div class="mini" style="color:${m["v" + n] < 0 ? txtNum(n) : "var(--muted)"}">${sinalV(m["v" + n])} votos</div><div class="mini">${sinal(m["r" + n])}%</div>`
       : `<span class="${m.lid === n ? "win" : ""}">${pctFmt(it.t2[n][1], 1)}%</span><div class="mini">${fmt(it.t2[n][0])}</div>`;
-    const quem = cresc ? m.quemCresc : m.lid, v = cresc ? Math.abs(m.saldo) : m.dp;
+    let chip;
+    if (perd) chip = m.quemPerde
+      ? `<span class="chip" style="--c:${corNum(m.quemPerde)};--t:${txtNum(m.quemPerde)}">${primeiro(m.quemPerde)} −${fmt(m.perdeu)}</span><div class="mini">−${pctFmt(m.rPerdeu, 1)}%</div>`
+      : `<span class="chip" style="--c:var(--muted)">ninguém</span>`;
+    else {
+      const quem = cresc ? m.quemCresc : m.lid, v = cresc ? Math.abs(m.saldo) : m.dp;
+      chip = `<span class="chip" style="--c:${corNum(quem)};--t:${txtNum(quem)}">${primeiro(quem)} +${pctFmt(v, 1)}</span>`;
+    }
     return `<tr data-id="${it.id}" class="${it.id === selId ? "sel" : ""}"><td>${nomeItem(it)}</td><td class="r">${cel("13")}</td><td class="r">${cel("22")}</td>
-      <td class="r"><span class="chip" style="--c:${corNum(quem)};--t:${txtNum(quem)}">${primeiro(quem)} +${pctFmt(v, 1)}</span></td></tr>`;
+      <td class="r">${chip}</td></tr>`;
   }).join("") || `<tr><td colspan="4" class="mini">${itens.length ? "Nada encontrado." : "Sem dados para mostrar."}</td></tr>`;
   $("lBody").querySelectorAll("tr[data-id]").forEach(tr => {
     tr.onmouseenter = () => realcar(tr.dataset.id, true);
@@ -368,12 +404,16 @@ function dicaHTML(it) {
   const m = calc(it);
   const cab = `<b>${it.nm}</b>${it.sub ? `<div class="mini">${it.sub}</div>` : ""}`;
   if (!m) return `${cab}<span class="mini">sem dados</span>`;
-  const linha = n => `<span style="color:${txtNum(n)}">${NOMES[n]}: ${pctFmt(it.t1[n][1])}% → <b>${pctFmt(it.t2[n][1])}%</b> (${sinal(it.t2[n][1] - it.t1[n][1], 2)} p.p.)</span>`;
+  const linha = n => `<span style="color:${txtNum(n)}">${NOMES[n]}: ${pctFmt(it.t1[n][1])}% → <b>${pctFmt(it.t2[n][1])}%</b> (${sinal(it.t2[n][1] - it.t1[n][1], 2)} p.p.)</span>` +
+    `<br><span class="mini">&nbsp;&nbsp;${fmt(it.t1[n][0])} → ${fmt(it.t2[n][0])} votos (${sinalV(m["v" + n])})</span>`;
+  const conclusao = modo === "perda"
+    ? (m.quemPerde ? `<b style="color:${txtNum(m.quemPerde)}">${NOMES[m.quemPerde]} perdeu ${fmt(m.perdeu)} votos (−${pctFmt(m.rPerdeu, 1)}%)</b>` : `<b>Os dois ganharam votos</b>`)
+    : `<b style="color:${txtNum(m.quemCresc)}">${NOMES[m.quemCresc]} cresceu ${pctFmt(Math.abs(m.saldo), 2)} p.p. a mais</b>`;
   const votos = it.t2.val != null
     ? `<br><span class="mini">2º turno: ${fmt(it.t2["13"][0])} × ${fmt(it.t2["22"][0])} votos · ${fmt(it.t2.br)} brancos · ${fmt(it.t2.nu)} nulos${it.nsec ? ` · ${it.nsec} seções` : ""}</span>`
     : `<br><span class="mini">2º turno: ${NOMES[m.lid]} vence por ${fmt(m.dv)} votos (${pctFmt(m.dp, 2)} p.p.)</span>`;
   return `${cab}<span class="mini">1º → 2º turno</span><br>${linha("13")}<br>${linha("22")}<br>
-    <b style="color:${txtNum(m.quemCresc)}">${NOMES[m.quemCresc]} cresceu ${pctFmt(Math.abs(m.saldo), 2)} p.p. a mais</b>${votos}`;
+    ${conclusao}${votos}`;
 }
 function realcar(id, daLista) {
   const fonte = daLista ? itens : mapaItens;
